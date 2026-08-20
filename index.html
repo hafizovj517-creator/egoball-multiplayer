@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>EgoBall Multiplayer</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; user-select:none; -webkit-user-select:none; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#0b0e17; font-family: system-ui, -apple-system, sans-serif; }
+  .screen { position:fixed; inset:0; display:none; }
+  .screen.active { display:flex; }
+
+  /* ---------- Auth ekrani ---------- */
+  #authScreen { align-items:center; justify-content:center; background:radial-gradient(circle at 50% 20%, #1c2340, #0b0e17 70%); }
+  #authBox { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); padding:30px 26px; border-radius:18px; width:min(90vw, 340px); color:#fff; backdrop-filter:blur(6px); }
+  #authBox h1 { text-align:center; font-size:30px; margin-bottom:4px; letter-spacing:1px; }
+  #authBox .tagline { text-align:center; font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:20px; }
+  #authBox input { width:100%; padding:13px 14px; margin-bottom:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.3); color:#fff; font-size:15px; }
+  #authBox input::placeholder { color:rgba(255,255,255,0.45); }
+  .authBtns { display:flex; gap:10px; margin-top:6px; }
+  .authBtns button { flex:1; padding:13px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; }
+  #loginBtn { background:linear-gradient(135deg,#3d7dff,#5b4dff); color:#fff; }
+  #registerBtn { background:rgba(255,255,255,0.1); color:#fff; }
+  #authError { min-height:18px; color:#ff7a7a; font-size:13px; margin-top:12px; text-align:center; }
+
+  /* ---------- Menyu ekrani ---------- */
+  #menuScreen { flex-direction:column; align-items:center; background:radial-gradient(circle at 50% 0%, #1a2140, #0b0e17 60%); padding:24px 16px; overflow-y:auto; }
+  #menuHeader { text-align:center; margin:14px 0 22px; color:#fff; }
+  #menuHeader h1 { font-size:26px; letter-spacing:1px; }
+  #menuHeader .welcome { font-size:13px; color:rgba(255,255,255,0.55); margin-top:4px; }
+  #menuHeader .stats { font-size:12px; color:rgba(255,255,255,0.4); margin-top:6px; }
+  #stadiumGrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:14px; width:100%; max-width:720px; }
+  .stadiumCard { border-radius:16px; padding:18px 14px; cursor:pointer; border:1px solid rgba(255,255,255,0.14); position:relative; overflow:hidden; transition:transform 0.12s; }
+  .stadiumCard:active { transform:scale(0.96); }
+  .stadiumCard .badge { position:absolute; top:10px; right:12px; font-size:11px; font-weight:700; background:rgba(0,0,0,0.35); color:#fff; padding:3px 8px; border-radius:20px; }
+  .stadiumCard .cardTitle { color:#fff; font-size:17px; font-weight:800; margin-top:26px; }
+  .stadiumCard .cardSub { color:rgba(255,255,255,0.7); font-size:12px; margin-top:4px; }
+  .stadiumCard .cardCount { color:rgba(255,255,255,0.55); font-size:11px; margin-top:10px; }
+  #logoutLink { margin-top:26px; color:rgba(255,255,255,0.45); font-size:13px; text-decoration:underline; cursor:pointer; }
+
+  /* ---------- O'yin ekrani ---------- */
+  #gameScreen { position:fixed; inset:0; }
+  #gameCanvas { display:block; touch-action:none; }
+
+  #hud { position:fixed; top:0; left:0; width:100%; display:flex; justify-content:center; align-items:flex-start; padding-top:10px; pointer-events:none; z-index:5; gap:8px; }
+  #scoreBox { background:rgba(0,0,0,0.45); color:#fff; padding:8px 22px; border-radius:12px; font-size:20px; font-weight:700; letter-spacing:1px; }
+  #scoreBox .red { color:#ff5b5b; }
+  #scoreBox .blue { color:#5b9bff; }
+  #stadiumLabel { position:fixed; top:12px; left:12px; background:rgba(0,0,0,0.4); color:rgba(255,255,255,0.8); font-size:12px; padding:6px 12px; border-radius:10px; z-index:5; }
+  #specBadge { position:fixed; top:44px; left:12px; background:rgba(255,200,0,0.25); border:1px solid rgba(255,200,0,0.6); color:#ffd84d; font-size:11px; padding:4px 10px; border-radius:10px; z-index:5; display:none; }
+
+  #message { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-size:22px; font-weight:700; text-align:center; background:rgba(0,0,0,0.55); padding:16px 26px; border-radius:14px; z-index:6; display:none; max-width:80vw; }
+
+  #topRightBtns { position:fixed; top:10px; right:10px; display:flex; gap:8px; z-index:10; }
+  .roundBtn { width:44px; height:44px; background:rgba(0,0,0,0.5); border:2px solid rgba(255,255,255,0.6); border-radius:10px; color:#fff; font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .roundBtn:active { background:rgba(255,255,255,0.25); }
+
+  #joystickZone { position:fixed; left:0; bottom:0; width:48%; height:50%; z-index:8; touch-action:none; }
+  #joystickBase { position:absolute; width:110px; height:110px; border-radius:50%; background:rgba(255,255,255,0.15); border:2px solid rgba(255,255,255,0.35); display:none; pointer-events:none; }
+  #joystickStick { position:absolute; width:50px; height:50px; border-radius:50%; background:rgba(255,255,255,0.55); display:none; pointer-events:none; }
+
+  #kickBtn { position:fixed; right:26px; bottom:36px; width:84px; height:84px; border-radius:50%; background:rgba(255,80,80,0.55); border:2px solid rgba(255,255,255,0.6); color:#fff; font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center; z-index:8; }
+  #kickBtn:active { background:rgba(255,80,80,0.85); }
+
+  @media (min-width: 900px) and (pointer: fine) {
+    #joystickZone, #kickBtn { display:none; }
+  }
+
+  /* ---------- Chat ---------- */
+  #chatToggleBtn { position:fixed; bottom:14px; left:14px; z-index:9; }
+  #chatPanel { position:fixed; bottom:64px; left:14px; width:min(78vw, 300px); max-height:42vh; background:rgba(10,12,20,0.82); border:1px solid rgba(255,255,255,0.15); border-radius:14px; display:none; flex-direction:column; z-index:9; backdrop-filter:blur(4px); }
+  #chatPanel.open { display:flex; }
+  #chatMessages { flex:1; overflow-y:auto; padding:10px 12px; font-size:13px; color:#fff; max-height:26vh; }
+  #chatMessages .msg { margin-bottom:6px; line-height:1.35; word-break:break-word; }
+  #chatMessages .msg .who { font-weight:700; }
+  #chatMessages .msg .who.red { color:#ff6b6b; }
+  #chatMessages .msg .who.blue { color:#6ba8ff; }
+  #chatMessages .msg .who.spec { color:#ffd84d; }
+  #chatInputRow { display:flex; border-top:1px solid rgba(255,255,255,0.1); }
+  #chatInput { flex:1; background:transparent; border:none; color:#fff; padding:10px 12px; font-size:13px; outline:none; }
+  #chatSendBtn { background:none; border:none; color:#5b9bff; font-weight:700; padding:0 14px; cursor:pointer; }
+
+  @media (min-width: 900px) and (pointer: fine) {
+    #chatPanel { bottom:14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH ============ -->
+<div id="authScreen" class="screen active">
+  <div id="authBox">
+    <h1>⚽ EgoBall</h1>
+    <div class="tagline">Multiplayer futbol arenasi</div>
+    <input id="usernameInput" type="text" placeholder="Foydalanuvchi nomi" maxlength="16" autocomplete="off">
+    <input id="passwordInput" type="password" placeholder="Parol" autocomplete="off">
+    <div class="authBtns">
+      <button id="loginBtn">Kirish</button>
+      <button id="registerBtn">Ro'yxatdan o'tish</button>
+    </div>
+    <div id="authError"></div>
+  </div>
+</div>
+
+<!-- ============ MENYU ============ -->
+<div id="menuScreen" class="screen">
+  <div id="menuHeader">
+    <h1>Stadium tanlang</h1>
+    <div class="welcome" id="welcomeText"></div>
+    <div class="stats" id="statsText"></div>
+  </div>
+  <div id="stadiumGrid"></div>
+  <div id="logoutLink">Chiqish</div>
+</div>
+
+<!-- ============ O'YIN ============ -->
+<div id="gameScreen" class="screen">
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="stadiumLabel"></div>
+  <div id="specBadge">TOMOSHABIN</div>
+
+  <div id="hud">
+    <div id="scoreBox"><span class="red">0</span> &nbsp;-&nbsp; <span class="blue">0</span></div>
+  </div>
+
+  <div id="message"></div>
+
+  <div id="topRightBtns">
+    <button class="roundBtn" id="menuBtn" title="Menyu">☰</button>
+    <button class="roundBtn" id="fullscreenBtn" title="To'liq ekran">⛶</button>
+  </div>
+
+  <div id="joystickZone">
+    <div id="joystickBase"></div>
+    <div id="joystickStick"></div>
+  </div>
+  <div id="kickBtn">URISH</div>
+
+  <button class="roundBtn" id="chatToggleBtn" title="Chat">💬</button>
+  <div id="chatPanel">
+    <div id="chatMessages"></div>
+    <div id="chatInputRow">
+      <input id="chatInput" type="text" placeholder="Xabar yozing..." maxlength="140">
+      <button id="chatSendBtn">Yuborish</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ================= AUTH =================
+const usernameInput = document.getElementById('usernameInput');
+const passwordInput = document.getElementById('passwordInput');
+const authError = document.getElementById('authError');
+let currentUser = null;
+let stadiumListCache = [];
+
+document.getElementById('registerBtn').onclick = () => {
+  authError.textContent = '';
+  socket.emit('register', { username: usernameInput.value, password: passwordInput.value }, (res) => {
+    authError.style.color = res.success ? '#7aff9c' : '#ff7a7a';
+    authError.textContent = res.success ? "Ro'yxatdan o'tildi! Endi kiring." : res.message;
+  });
+};
+
+document.getElementById('loginBtn').onclick = () => {
+  authError.textContent = '';
+  socket.emit('login', { username: usernameInput.value, password: passwordInput.value }, (res) => {
+    if (!res.success) {
+      authError.style.color = '#ff7a7a';
+      authError.textContent = res.message;
+      return;
+    }
+    currentUser = res.user;
+    stadiumListCache = res.stadiums;
+    document.getElementById('welcomeText').textContent = `Xush kelibsiz, ${currentUser.username}`;
+    document.getElementById('statsText').textContent = `G'alaba: ${currentUser.wins}  •  Mag'lubiyat: ${currentUser.losses}  •  Gollar: ${currentUser.goals}`;
+    renderStadiumGrid();
+    showScreen('menuScreen');
+  });
+};
+
+document.getElementById('logoutLink').onclick = () => {
+  socket.emit('leaveStadium');
+  showScreen('authScreen');
+};
+
+// ================= MENYU =================
+function renderStadiumGrid() {
+  const grid = document.getElementById('stadiumGrid');
+  grid.innerHTML = '';
+  stadiumListCache.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'stadiumCard';
+    card.style.background = `linear-gradient(150deg, ${s.colors.field}, ${s.colors.field2})`;
+    card.innerHTML = `
+      <div class="badge">${s.key.toUpperCase()}</div>
+      <div class="cardTitle">${s.name}</div>
+      <div class="cardSub">${s.teamSize} vs ${s.teamSize}</div>
+      <div class="cardCount">Jamoada ${s.teamSize} joy</div>
+    `;
+    card.onclick = () => joinStadium(s.key);
+    grid.appendChild(card);
+  });
+}
+
+let currentConfig = null;
+let currentRole = null; // 'player' | 'spectator'
+let currentTeam = null;
+
+function joinStadium(key) {
+  socket.emit('joinStadium', key, (res) => {
+    if (!res.success) return;
+    currentConfig = res.config;
+    currentRole = res.role;
+    currentTeam = res.team || null;
+
+    document.getElementById('stadiumLabel').textContent = currentConfig.name + ' • ' + currentConfig.teamSize + 'v' + currentConfig.teamSize;
+    document.getElementById('specBadge').style.display = currentRole === 'spectator' ? 'block' : 'none';
+    document.getElementById('chatMessages').innerHTML = '';
+
+    applyStadiumTheme(currentConfig);
+    showScreen('gameScreen');
+    resizeCanvas();
+  });
+}
+
+document.getElementById('menuBtn').onclick = () => {
+  socket.emit('leaveStadium');
+  document.getElementById('statsText').textContent = currentUser ? `G'alaba: ${currentUser.wins}  •  Mag'lubiyat: ${currentUser.losses}  •  Gollar: ${currentUser.goals}` : '';
+  showScreen('menuScreen');
+};
+
+function applyStadiumTheme(cfg) {
+  document.body.style.background = cfg.colors.bg;
+}
+
+// ================= CANVAS =================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 200));
+resizeCanvas();
+
+let latestState = null;
+
+// ================= INPUT =================
+const input = { x: 0, y: 0, kick: false };
+const keys = { up:false, down:false, left:false, right:false };
+
+function sendInput() {
+  if (currentRole !== 'player') return;
+  socket.emit('input', input);
+}
+
+function updateKeyboardVector() {
+  let x = 0, y = 0;
+  if (keys.left) x -= 1;
+  if (keys.right) x += 1;
+  if (keys.up) y -= 1;
+  if (keys.down) y += 1;
+  input.x = x;
+  input.y = y;
+  sendInput();
+}
+
+window.addEventListener('keydown', (e) => {
+  if (document.activeElement === document.getElementById('chatInput')) return;
+  let changed = true;
+  const k = e.key.toLowerCase();
+  if (k === 'arrowup' || k === 'w') keys.up = true;
+  else if (k === 'arrowdown' || k === 's') keys.down = true;
+  else if (k === 'arrowleft' || k === 'a') keys.left = true;
+  else if (k === 'arrowright' || k === 'd') keys.right = true;
+  else if (k === ' ') { input.kick = true; sendInput(); }
+  else changed = false;
+  if (changed) updateKeyboardVector();
+});
+
+window.addEventListener('keyup', (e) => {
+  let changed = true;
+  const k = e.key.toLowerCase();
+  if (k === 'arrowup' || k === 'w') keys.up = false;
+  else if (k === 'arrowdown' || k === 's') keys.down = false;
+  else if (k === 'arrowleft' || k === 'a') keys.left = false;
+  else if (k === 'arrowright' || k === 'd') keys.right = false;
+  else if (k === ' ') { input.kick = false; sendInput(); }
+  else changed = false;
+  if (changed) updateKeyboardVector();
+});
+
+// ---- Virtual joystick ----
+const joystickZone = document.getElementById('joystickZone');
+const joystickBase = document.getElementById('joystickBase');
+const joystickStick = document.getElementById('joystickStick');
+let joystickActive = false;
+let joystickOrigin = { x:0, y:0 };
+const JOY_RADIUS = 55;
+let joystickTouchId = null;
+
+function joystickStart(clientX, clientY) {
+  joystickActive = true;
+  joystickOrigin = { x: clientX, y: clientY };
+  joystickBase.style.left = (clientX - 55) + 'px';
+  joystickBase.style.top = (clientY - 55) + 'px';
+  joystickStick.style.left = (clientX - 25) + 'px';
+  joystickStick.style.top = (clientY - 25) + 'px';
+  joystickBase.style.display = 'block';
+  joystickStick.style.display = 'block';
+}
+
+function joystickMove(clientX, clientY) {
+  if (!joystickActive) return;
+  let dx = clientX - joystickOrigin.x;
+  let dy = clientY - joystickOrigin.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > JOY_RADIUS) { dx = (dx/dist)*JOY_RADIUS; dy = (dy/dist)*JOY_RADIUS; }
+  joystickStick.style.left = (joystickOrigin.x + dx - 25) + 'px';
+  joystickStick.style.top = (joystickOrigin.y + dy - 25) + 'px';
+  input.x = dx / JOY_RADIUS;
+  input.y = dy / JOY_RADIUS;
+  sendInput();
+}
+
+function joystickEnd() {
+  joystickActive = false;
+  joystickTouchId = null;
+  joystickBase.style.display = 'none';
+  joystickStick.style.display = 'none';
+  input.x = 0; input.y = 0;
+  sendInput();
+}
+
+joystickZone.addEventListener('touchstart', (e) => {
+  const t = e.changedTouches[0];
+  joystickTouchId = t.identifier;
+  joystickStart(t.clientX, t.clientY);
+}, { passive:true });
+
+joystickZone.addEventListener('touchmove', (e) => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joystickTouchId) joystickMove(t.clientX, t.clientY);
+  }
+}, { passive:true });
+
+joystickZone.addEventListener('touchend', (e) => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joystickTouchId) joystickEnd();
+  }
+});
+joystickZone.addEventListener('touchcancel', joystickEnd);
+
+// ---- Urish tugmasi ----
+const kickBtn = document.getElementById('kickBtn');
+kickBtn.addEventListener('touchstart', (e) => { e.preventDefault(); input.kick = true; sendInput(); }, { passive:false });
+kickBtn.addEventListener('touchend', (e) => { e.preventDefault(); input.kick = false; sendInput(); }, { passive:false });
+kickBtn.addEventListener('touchcancel', () => { input.kick = false; sendInput(); });
+
+// ---- Fullscreen ----
+document.getElementById('fullscreenBtn').addEventListener('click', () => {
+  const el = document.documentElement;
+  const isFull = document.fullscreenElement || document.webkitFullscreenElement;
+  if (!isFull) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (req) req.call(el);
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (exit) exit.call(document);
+  }
+});
+
+// ================= CHAT =================
+const chatPanel = document.getElementById('chatPanel');
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+
+document.getElementById('chatToggleBtn').onclick = () => {
+  chatPanel.classList.toggle('open');
+};
+
+function sendChat() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  socket.emit('chat', text);
+  chatInput.value = '';
+}
+
+document.getElementById('chatSendBtn').onclick = sendChat;
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendChat();
+});
+
+socket.on('chat', (data) => {
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const whoClass = data.isSpectator ? 'spec' : (data.team === 'red' ? 'red' : data.team === 'blue' ? 'blue' : '');
+  const label = data.isSpectator ? `${data.username} (tomoshabin)` : data.username;
+  div.innerHTML = `<span class="who ${whoClass}">${label}:</span> ${escapeHtml(data.text)}`;
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ================= SOCKET STATE =================
+socket.on('state', (state) => {
+  latestState = state;
+  document.querySelector('#scoreBox .red').textContent = state.score.red;
+  document.querySelector('#scoreBox .blue').textContent = state.score.blue;
+
+  const msgEl = document.getElementById('message');
+  if (state.paused && state.pauseReason === 'waiting') {
+    msgEl.style.display = 'block';
+    msgEl.textContent = "Raqib kutilmoqda...";
+  } else if (!state.paused) {
+    msgEl.style.display = 'none';
+  }
+});
+
+socket.on('goal', (data) => {
+  const msgEl = document.getElementById('message');
+  msgEl.style.display = 'block';
+  msgEl.textContent = (data.team === 'red' ? "QIZIL" : "KO'K") + " JAMOA GOL URDI!";
+  setTimeout(() => { msgEl.style.display = 'none'; }, 1700);
+});
+
+socket.on('matchEnd', (data) => {
+  const msgEl = document.getElementById('message');
+  msgEl.style.display = 'block';
+  msgEl.textContent = (data.winningTeam === 'red' ? "QIZIL" : "KO'K") + " JAMOA G'OLIB BO'LDI!";
+  setTimeout(() => { msgEl.style.display = 'none'; }, 3800);
+});
+
+// ================= RENDER =================
+function render() {
+  requestAnimationFrame(render);
+  if (!latestState || !currentConfig) return;
+
+  const cfg = currentConfig;
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const scale = Math.min(w / cfg.worldWidth, h / cfg.worldHeight) * 0.94;
+  const offsetX = (w - cfg.worldWidth * scale) / 2;
+  const offsetY = (h - cfg.worldHeight * scale) / 2;
+
+  const tx = (x) => offsetX + x * scale;
+  const ty = (y) => offsetY + y * scale;
+
+  // maydon foni (gradient effekti uchun ikkita rang)
+  const grad = ctx.createLinearGradient(tx(cfg.fieldLeft), ty(cfg.fieldTop), tx(cfg.fieldRight), ty(cfg.fieldBottom));
+  grad.addColorStop(0, cfg.colors.field);
+  grad.addColorStop(1, cfg.colors.field2);
+  ctx.fillStyle = grad;
+  ctx.fillRect(tx(cfg.fieldLeft), ty(cfg.fieldTop), (cfg.fieldRight-cfg.fieldLeft)*scale, (cfg.fieldBottom-cfg.fieldTop)*scale);
+
+  ctx.strokeStyle = cfg.colors.line;
+  ctx.globalAlpha = 0.8;
+  ctx.lineWidth = 2 * scale;
+  ctx.strokeRect(tx(cfg.fieldLeft), ty(cfg.fieldTop), (cfg.fieldRight-cfg.fieldLeft)*scale, (cfg.fieldBottom-cfg.fieldTop)*scale);
+
+  const midX = (cfg.fieldLeft+cfg.fieldRight)/2;
+  ctx.beginPath();
+  ctx.moveTo(tx(midX), ty(cfg.fieldTop));
+  ctx.lineTo(tx(midX), ty(cfg.fieldBottom));
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(tx(midX), ty((cfg.fieldTop+cfg.fieldBottom)/2), 45*scale, 0, Math.PI*2);
+  ctx.stroke();
+
+  ctx.strokeRect(tx(cfg.fieldLeft-cfg.goalDepth), ty(cfg.goalTop), cfg.goalDepth*scale, (cfg.goalBottom-cfg.goalTop)*scale);
+  ctx.strokeRect(tx(cfg.fieldRight), ty(cfg.goalTop), cfg.goalDepth*scale, (cfg.goalBottom-cfg.goalTop)*scale);
+  ctx.globalAlpha = 1;
+
+  for (const p of latestState.players) {
+    ctx.beginPath();
+    ctx.arc(tx(p.x), ty(p.y), 15*scale, 0, Math.PI*2);
+    ctx.fillStyle = p.team === 'red' ? cfg.colors.accentRed : cfg.colors.accentBlue;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = `${12*scale}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(p.username, tx(p.x), ty(p.y) - 15*scale - 6);
+  }
+
+  const ball = latestState.ball;
+  ctx.beginPath();
+  ctx.arc(tx(ball.x), ty(ball.y), 10*scale, 0, Math.PI*2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.stroke();
+}
+render();
+</script>
+</body>
+</html>
